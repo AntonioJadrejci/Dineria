@@ -218,3 +218,28 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ==========================================
+# Dineria - Vue.js / Node.js
+# ==========================================
+
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Frontend build and cache
+.vite/
+coverage/
+
+# Environment files
+.env.*
+!.env.example
+
+# IDE
+.idea/
+
+# Operating system
+.DS_Store
+Thumbs.db
