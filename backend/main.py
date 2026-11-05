@@ -1,4 +1,4 @@
-
+from database import test_connection
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -27,3 +27,23 @@ def health_check():
         "status": "ok",
         "application": "Dineria"
     }
+
+
+@app.get("/api/database-test")
+def database_test():
+    try:
+        result = test_connection()
+
+        return {
+            "status": "connected",
+            "database": "Supabase PostgreSQL",
+            "result": result
+        }
+
+    except Exception as error:
+        print("Database connection failed:", type(error).__name__)
+
+        return {
+            "status": "error",
+            "message": "Database connection failed"
+        }

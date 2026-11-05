@@ -234,6 +234,7 @@ yarn-error.log*
 coverage/
 
 # Environment files
+.env
 .env.*
 !.env.example
 
