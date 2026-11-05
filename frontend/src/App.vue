@@ -25,7 +25,9 @@ onMounted(async () => {
     <h1>Welcome to Dineria</h1>
 
     <p>Modern digital menus for restaurants.</p>
-
+<div class="rounded-2xl bg-orange-500 p-6 text-center text-2xl font-bold text-white">
+  Dineria – Tailwind CSS radi!
+</div>
     <div class="status-card">
       <h2>Backend Connection</h2>
 
