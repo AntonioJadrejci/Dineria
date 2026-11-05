@@ -36,3 +36,21 @@ class ProductResponse(ProductCreate):
     id: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class CategoryWithProducts(BaseModel):
+    id: int
+    name: str
+    products: list[ProductResponse]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RestaurantMenuResponse(BaseModel):
+    id: int
+    name: str
+    slug: str
+    description: str | None
+    categories: list[CategoryWithProducts]
+
+    model_config = ConfigDict(from_attributes=True)

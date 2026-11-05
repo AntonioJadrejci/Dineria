@@ -3,13 +3,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Depends
 from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from database import get_db
 from models import Restaurant
 from schemas import RestaurantCreate, RestaurantResponse
 from fastapi import HTTPException
 from models import Category, Product
-from schemas import CategoryCreate, CategoryResponse, ProductCreate, ProductResponse
+from schemas import CategoryCreate, CategoryResponse, ProductCreate, ProductResponse, RestaurantMenuResponse
 app = FastAPI(
     title="Dineria API",
     version="1.0.0"
@@ -125,3 +127,31 @@ def create_product(
     db.refresh(new_product)
 
     return new_product
+
+
+@app.get(
+    "/api/restaurants/{slug}/menu",
+    response_model=RestaurantMenuResponse
+)
+def get_restaurant_menu(
+    slug: str,
+    db: Session = Depends(get_db)
+):
+    statement = (
+        select(Restaurant)
+        .where(Restaurant.slug == slug)
+        .options(
+            selectinload(Restaurant.categories)
+            .selectinload(Category.products)
+        )
+    )
+
+    restaurant = db.scalar(statement)
+
+    if restaurant is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Restaurant not found"
+        )
+
+    return restaurant
