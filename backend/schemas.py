@@ -58,6 +58,7 @@ class RestaurantMenuResponse(BaseModel):
 
 class ProductUpdate(BaseModel):
     name: str | None = None
+    category_id: int | None = Field(default=None, gt=0)
     description: str | None = None
     price: Decimal | None = Field(
         default=None,

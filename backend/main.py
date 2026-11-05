@@ -1,17 +1,24 @@
-from database import test_connection
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi import Depends
-from sqlalchemy.orm import Session
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 
-from database import get_db
-from models import Restaurant
-from schemas import RestaurantCreate, RestaurantResponse
-from fastapi import HTTPException
-from models import Category, Product
-from schemas import CategoryCreate, CategoryResponse, ProductCreate, ProductResponse, RestaurantMenuResponse, ProductUpdate
+from fastapi import FastAPI, Depends, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session, selectinload
+
+from database import get_db, test_connection
+from models import Restaurant, Category, Product
+from schemas import (
+    RestaurantCreate,
+    RestaurantResponse,
+    CategoryCreate,
+    CategoryResponse,
+    ProductCreate,
+    ProductResponse,
+    ProductUpdate,
+    RestaurantMenuResponse
+)
+
+
 app = FastAPI(
     title="Dineria API",
     version="1.0.0"
@@ -25,11 +32,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.get("/")
 def root():
     return {
         "message": "Welcome to Dineria API!"
     }
+
 
 @app.get("/api/health")
 def health_check():
@@ -59,7 +68,10 @@ def database_test():
         }
 
 
-@app.post("/api/restaurants", response_model=RestaurantResponse)
+@app.post(
+    "/api/restaurants",
+    response_model=RestaurantResponse
+)
 def create_restaurant(
     restaurant: RestaurantCreate,
     db: Session = Depends(get_db)
@@ -77,7 +89,11 @@ def create_restaurant(
     return new_restaurant
 
 
-@app.post("/api/categories", response_model=CategoryResponse, status_code=201)
+@app.post(
+    "/api/categories",
+    response_model=CategoryResponse,
+    status_code=201
+)
 def create_category(
     category: CategoryCreate,
     db: Session = Depends(get_db)
@@ -102,7 +118,11 @@ def create_category(
     return new_category
 
 
-@app.post("/api/products", response_model=ProductResponse, status_code=201)
+@app.post(
+    "/api/products",
+    response_model=ProductResponse,
+    status_code=201
+)
 def create_product(
     product: ProductCreate,
     db: Session = Depends(get_db)
@@ -157,7 +177,10 @@ def get_restaurant_menu(
     return restaurant
 
 
-@app.patch("/api/products/{product_id}", response_model=ProductResponse)
+@app.patch(
+    "/api/products/{product_id}",
+    response_model=ProductResponse
+)
 def update_product(
     product_id: int,
     product: ProductUpdate,
@@ -173,6 +196,36 @@ def update_product(
 
     update_data = product.model_dump(exclude_unset=True)
 
+    # Provjeri novu kategoriju ako je korisnik mijenja.
+    if "category_id" in update_data:
+        new_category_id = update_data["category_id"]
+
+        if new_category_id is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Category ID cannot be null"
+            )
+
+        new_category = db.get(Category, new_category_id)
+
+        if new_category is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Category not found"
+            )
+
+        current_category = db.get(
+            Category,
+            existing_product.category_id
+        )
+
+        if new_category.restaurant_id != current_category.restaurant_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Category belongs to another restaurant"
+            )
+
+    # Ažuriraj samo polja koja su poslana.
     for field, value in update_data.items():
         setattr(existing_product, field, value)
 
@@ -182,7 +235,10 @@ def update_product(
     return existing_product
 
 
-@app.delete("/api/products/{product_id}", status_code=204)
+@app.delete(
+    "/api/products/{product_id}",
+    status_code=204
+)
 def delete_product(
     product_id: int,
     db: Session = Depends(get_db)
@@ -197,4 +253,3 @@ def delete_product(
 
     db.delete(existing_product)
     db.commit()
-
