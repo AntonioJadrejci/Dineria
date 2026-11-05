@@ -1,7 +1,7 @@
 
 import os
 from pathlib import Path
-
+from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL
@@ -30,3 +30,7 @@ def test_connection():
     with engine.connect() as connection:
         result = connection.execute(text("SELECT 1"))
         return result.scalar()
+
+def get_db():
+    with Session(engine) as session:
+        yield session

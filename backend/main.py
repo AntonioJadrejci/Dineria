@@ -1,7 +1,15 @@
 from database import test_connection
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Depends
+from sqlalchemy.orm import Session
 
+from database import get_db
+from models import Restaurant
+from schemas import RestaurantCreate, RestaurantResponse
+from fastapi import HTTPException
+from models import Category
+from schemas import CategoryCreate, CategoryResponse
 app = FastAPI(
     title="Dineria API",
     version="1.0.0"
@@ -47,3 +55,46 @@ def database_test():
             "status": "error",
             "message": "Database connection failed"
         }
+
+
+@app.post("/api/restaurants", response_model=RestaurantResponse)
+def create_restaurant(
+    restaurant: RestaurantCreate,
+    db: Session = Depends(get_db)
+):
+    new_restaurant = Restaurant(
+        name=restaurant.name,
+        slug=restaurant.slug,
+        description=restaurant.description
+    )
+
+    db.add(new_restaurant)
+    db.commit()
+    db.refresh(new_restaurant)
+
+    return new_restaurant
+
+
+@app.post("/api/categories", response_model=CategoryResponse, status_code=201)
+def create_category(
+    category: CategoryCreate,
+    db: Session = Depends(get_db)
+):
+    restaurant = db.get(Restaurant, category.restaurant_id)
+
+    if restaurant is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Restaurant not found"
+        )
+
+    new_category = Category(
+        name=category.name,
+        restaurant_id=category.restaurant_id
+    )
+
+    db.add(new_category)
+    db.commit()
+    db.refresh(new_category)
+
+    return new_category
