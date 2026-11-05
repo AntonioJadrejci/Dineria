@@ -30,13 +30,14 @@ class ProductCreate(BaseModel):
     description: str | None = None
     price: Decimal = Field(gt=0, max_digits=10, decimal_places=2)
     category_id: int
+    image_url: str | None = None
 
 
 class ProductResponse(ProductCreate):
     id: int
 
     model_config = ConfigDict(from_attributes=True)
-
+image_url: str | None = None
 
 class CategoryWithProducts(BaseModel):
     id: int
@@ -66,3 +67,4 @@ class ProductUpdate(BaseModel):
         max_digits=10,
         decimal_places=2
     )
+    image_url: str | None = None

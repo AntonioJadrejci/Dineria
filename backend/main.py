@@ -1,6 +1,11 @@
 
-from fastapi import FastAPI, Depends, HTTPException
+from io import BytesIO
+from uuid import uuid4
+
+from fastapi import FastAPI, Depends, HTTPException, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+
+from PIL import Image, UnidentifiedImageError
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -15,9 +20,9 @@ from schemas import (
     ProductCreate,
     ProductResponse,
     ProductUpdate,
-    RestaurantMenuResponse
+    RestaurantMenuResponse,
 )
-
+from storage import supabase, BUCKET_NAME
 
 app = FastAPI(
     title="Dineria API",
@@ -253,3 +258,92 @@ def delete_product(
 
     db.delete(existing_product)
     db.commit()
+
+
+MAX_IMAGE_SIZE = 5 * 1024 * 1024
+
+ALLOWED_IMAGE_TYPES = {
+    "JPEG": ("image/jpeg", "jpg"),
+    "PNG": ("image/png", "png"),
+    "WEBP": ("image/webp", "webp"),
+}
+
+
+@app.post(
+    "/api/products/{product_id}/image",
+    response_model=ProductResponse
+)
+async def upload_product_image(
+    product_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    product = db.get(Product, product_id)
+
+    if product is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Product not found"
+        )
+
+    # Čitamo najviše 5 MB + 1 bajt.
+    image_bytes = await file.read(MAX_IMAGE_SIZE + 1)
+
+    if len(image_bytes) > MAX_IMAGE_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail="Image must be smaller than 5 MB"
+        )
+
+    try:
+        with Image.open(BytesIO(image_bytes)) as image:
+            image_format = image.format
+            image.verify()
+    except (UnidentifiedImageError, OSError, ValueError):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid image file"
+        )
+
+    if image_format not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="Only JPEG, PNG and WEBP are allowed"
+        )
+
+    content_type, extension = ALLOWED_IMAGE_TYPES[image_format]
+
+    file_path = (
+        f"restaurants/{product.category.restaurant_id}/"
+        f"products/{product.id}/{uuid4().hex}.{extension}"
+    )
+
+    
+    try:
+        supabase.storage.from_(BUCKET_NAME).upload(
+            path=file_path,
+            file=image_bytes,
+            file_options={
+                "content-type": content_type,
+                "upsert": "false"
+            }
+        )
+
+        image_url = supabase.storage.from_(
+            BUCKET_NAME
+        ).get_public_url(file_path)
+
+    except Exception as error:
+        print(f"SUPABASE STORAGE ERROR: {error}")
+
+        raise HTTPException(
+            status_code=502,
+            detail="Image upload failed"
+        ) from error
+
+    product.image_url = image_url
+    db.commit()
+    db.refresh(product)
+
+    return product
+
