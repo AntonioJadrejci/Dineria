@@ -11,7 +11,7 @@ from models import Restaurant
 from schemas import RestaurantCreate, RestaurantResponse
 from fastapi import HTTPException
 from models import Category, Product
-from schemas import CategoryCreate, CategoryResponse, ProductCreate, ProductResponse, RestaurantMenuResponse
+from schemas import CategoryCreate, CategoryResponse, ProductCreate, ProductResponse, RestaurantMenuResponse, ProductUpdate
 app = FastAPI(
     title="Dineria API",
     version="1.0.0"
@@ -155,3 +155,46 @@ def get_restaurant_menu(
         )
 
     return restaurant
+
+
+@app.patch("/api/products/{product_id}", response_model=ProductResponse)
+def update_product(
+    product_id: int,
+    product: ProductUpdate,
+    db: Session = Depends(get_db)
+):
+    existing_product = db.get(Product, product_id)
+
+    if existing_product is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Product not found"
+        )
+
+    update_data = product.model_dump(exclude_unset=True)
+
+    for field, value in update_data.items():
+        setattr(existing_product, field, value)
+
+    db.commit()
+    db.refresh(existing_product)
+
+    return existing_product
+
+
+@app.delete("/api/products/{product_id}", status_code=204)
+def delete_product(
+    product_id: int,
+    db: Session = Depends(get_db)
+):
+    existing_product = db.get(Product, product_id)
+
+    if existing_product is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Product not found"
+        )
+
+    db.delete(existing_product)
+    db.commit()
+

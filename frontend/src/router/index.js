@@ -1,8 +1,16 @@
+
 import { createRouter, createWebHistory } from 'vue-router'
+import MenuView from '../views/MenuView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
-  routes: [],
+  routes: [
+    {
+      path: '/menu/:slug',
+      name: 'menu',
+      component: MenuView
+    }
+  ],
 })
 
 export default router

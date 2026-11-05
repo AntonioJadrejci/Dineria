@@ -54,3 +54,14 @@ class RestaurantMenuResponse(BaseModel):
     categories: list[CategoryWithProducts]
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ProductUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    price: Decimal | None = Field(
+        default=None,
+        gt=0,
+        max_digits=10,
+        decimal_places=2
+    )
