@@ -2,17 +2,19 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 
+const API_URL = 'http://127.0.0.1:8000'
+const RESTAURANT_SLUG = 'dineria-demo'
+
 const restaurant = ref(null)
 const loading = ref(true)
 const error = ref('')
 
-const API_URL = 'http://127.0.0.1:8000'
-const RESTAURANT_SLUG = 'dineria-demo'
-
-
 const showProductForm = ref(false)
 const saving = ref(false)
 const formError = ref('')
+const editingProductId = ref(null)
+const selectedImage = ref(null)
+const currentImageUrl = ref(null)
 
 const productForm = ref({
   name: '',
@@ -21,8 +23,7 @@ const productForm = ref({
   category_id: ''
 })
 
-const editingProductId = ref(null)
-
+// Dohvaćanje podataka restorana
 async function loadDashboard() {
   loading.value = true
   error.value = ''
@@ -33,7 +34,7 @@ async function loadDashboard() {
     )
 
     if (!response.ok) {
-      throw new Error('Nije moguće učitati podatke.')
+      throw new Error('Nije moguće učitati podatke restorana.')
     }
 
     restaurant.value = await response.json()
@@ -44,23 +45,27 @@ async function loadDashboard() {
   }
 }
 
+// Pretvaranje kategorija u jedinstveni popis proizvoda
 const products = computed(() => {
   if (!restaurant.value) return []
 
-  return restaurant.value.categories.flatMap(
-    category => category.products.map(product => ({
+  return restaurant.value.categories.flatMap(category =>
+    category.products.map(product => ({
       ...product,
       categoryName: category.name
     }))
   )
 })
 
-const categoryCount = computed(() =>
-  restaurant.value?.categories.length ?? 0
+const categoryCount = computed(
+  () => restaurant.value?.categories.length ?? 0
 )
 
-const productCount = computed(() => products.value.length)
+const productCount = computed(
+  () => products.value.length
+)
 
+// Formatiranje cijena
 function formatPrice(price) {
   return new Intl.NumberFormat('hr-HR', {
     style: 'currency',
@@ -68,29 +73,90 @@ function formatPrice(price) {
   }).format(Number(price))
 }
 
-
+// Otvaranje obrasca za dodavanje ili uređivanje
 function openProductForm(product = null) {
+  selectedImage.value = null
   editingProductId.value = product?.id ?? null
+  currentImageUrl.value = product?.image_url ?? null
 
   productForm.value = {
     name: product?.name ?? '',
     description: product?.description ?? '',
     price: product?.price ?? '',
-    category_id: product?.category_id ??
-      restaurant.value?.categories[0]?.id ?? ''
+    category_id:
+      product?.category_id ??
+      restaurant.value?.categories[0]?.id ??
+      ''
   }
 
   formError.value = ''
   showProductForm.value = true
 }
 
-
+// Zatvaranje obrasca
 function closeProductForm() {
+  if (saving.value) return
+
   showProductForm.value = false
   formError.value = ''
+  selectedImage.value = null
+  editingProductId.value = null
+  currentImageUrl.value = null
 }
 
+// Odabir i provjera fotografije
+function handleImageChange(event) {
+  const file = event.target.files?.[0]
 
+  selectedImage.value = null
+  formError.value = ''
+
+  if (!file) return
+
+  const allowedTypes = [
+    'image/jpeg',
+    'image/png',
+    'image/webp'
+  ]
+
+  if (!allowedTypes.includes(file.type)) {
+    formError.value = 'Dopušteni su samo JPG, PNG i WebP.'
+    event.target.value = ''
+    return
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    formError.value = 'Fotografija ne smije biti veća od 5 MB.'
+    event.target.value = ''
+    return
+  }
+
+  selectedImage.value = file
+}
+
+// Slanje fotografije FastAPI backendu
+async function uploadProductImage(productId) {
+  if (!selectedImage.value) return
+
+  const formData = new FormData()
+  formData.append('file', selectedImage.value)
+
+  const response = await fetch(
+    `${API_URL}/api/products/${productId}/image`,
+    {
+      method: 'POST',
+      body: formData
+    }
+  )
+
+  if (!response.ok) {
+    throw new Error('Upload fotografije nije uspio.')
+  }
+
+  return await response.json()
+}
+
+// Dodavanje i uređivanje proizvoda
 async function saveProduct() {
   if (saving.value) return
 
@@ -121,7 +187,28 @@ async function saveProduct() {
       throw new Error('Spremanje proizvoda nije uspjelo.')
     }
 
-    closeProductForm()
+    const savedProduct = await response.json()
+
+    // Ako je odabrana fotografija, šaljemo je zasebno
+    if (selectedImage.value) {
+      try {
+        await uploadProductImage(savedProduct.id)
+      } catch {
+        await loadDashboard()
+
+        throw new Error(
+          'Proizvod je spremljen, ali fotografija nije. ' +
+          'Pokušaj ponovno dodati fotografiju.'
+        )
+      }
+    }
+
+    // Zatvaranje nakon uspješnog spremanja
+    showProductForm.value = false
+    selectedImage.value = null
+    editingProductId.value = null
+    currentImageUrl.value = null
+
     await loadDashboard()
   } catch (err) {
     formError.value = err.message
@@ -130,7 +217,7 @@ async function saveProduct() {
   }
 }
 
-
+// Brisanje proizvoda
 async function deleteProduct(product) {
   const confirmed = window.confirm(
     `Jesi li siguran da želiš obrisati proizvod "${product.name}"?`
@@ -156,38 +243,44 @@ async function deleteProduct(product) {
   }
 }
 
-
 onMounted(loadDashboard)
 </script>
 
 <template>
   <div class="min-h-screen bg-stone-50 text-stone-900">
+    <!-- HEADER -->
     <header class="border-b border-stone-200 bg-white">
-      <div class="mx-auto flex max-w-6xl items-center justify-between px-5 py-5">
+      <div
+        class="mx-auto flex max-w-6xl items-center justify-between px-5 py-5"
+      >
         <h1 class="text-2xl font-extrabold">
           dineria<span class="text-orange-500">.</span>
-          <span class="ml-2 text-sm font-medium text-stone-400">Admin</span>
+          <span class="ml-2 text-sm font-medium text-stone-400">
+            Admin
+          </span>
         </h1>
 
-        <a
-          :href="`/menu/${RESTAURANT_SLUG}`"
+        <RouterLink
+          :to="`/menu/${RESTAURANT_SLUG}`"
           class="text-sm font-medium text-orange-600 hover:text-orange-700"
         >
           Pogledaj jelovnik
-        </a>
+        </RouterLink>
       </div>
     </header>
 
+    <!-- DASHBOARD -->
     <main class="mx-auto max-w-6xl px-5 py-10">
-      <div v-if="loading" class="text-stone-500">
+      <p v-if="loading" class="text-stone-500">
         Učitavanje dashboarda...
-      </div>
+      </p>
 
-      <div v-else-if="error" class="text-red-600">
+      <p v-else-if="error" class="text-red-600">
         {{ error }}
-      </div>
+      </p>
 
       <template v-else-if="restaurant">
+        <!-- Naslov -->
         <div class="mb-8">
           <p class="mb-2 text-sm font-semibold text-orange-600">
             ADMIN DASHBOARD
@@ -202,36 +295,53 @@ onMounted(loadDashboard)
           </p>
         </div>
 
+        <!-- Statistika -->
         <div class="mb-10 grid gap-4 sm:grid-cols-3">
-          <div class="rounded-2xl border border-stone-200 bg-white p-6">
+          <div
+            class="rounded-2xl border border-stone-200 bg-white p-6"
+          >
             <p class="text-sm text-stone-500">Kategorije</p>
-            <p class="mt-2 text-3xl font-bold">{{ categoryCount }}</p>
+            <p class="mt-2 text-3xl font-bold">
+              {{ categoryCount }}
+            </p>
           </div>
 
-          <div class="rounded-2xl border border-stone-200 bg-white p-6">
+          <div
+            class="rounded-2xl border border-stone-200 bg-white p-6"
+          >
             <p class="text-sm text-stone-500">Proizvodi</p>
-            <p class="mt-2 text-3xl font-bold">{{ productCount }}</p>
+            <p class="mt-2 text-3xl font-bold">
+              {{ productCount }}
+            </p>
           </div>
 
-          <div class="rounded-2xl border border-stone-200 bg-white p-6">
+          <div
+            class="rounded-2xl border border-stone-200 bg-white p-6"
+          >
             <p class="text-sm text-stone-500">Restoran</p>
-            <p class="mt-2 text-lg font-bold">Aktivan</p>
+            <p class="mt-2 text-lg font-bold">
+              Aktivan
+            </p>
           </div>
         </div>
 
-        <section class="overflow-hidden rounded-2xl border border-stone-200 bg-white">
-          <div class="flex items-center justify-between border-b border-stone-200 p-6">
+        <!-- Popis proizvoda -->
+        <section
+          class="overflow-hidden rounded-2xl border border-stone-200 bg-white"
+        >
+          <div
+            class="flex flex-wrap items-center justify-between gap-4 border-b border-stone-200 p-6"
+          >
             <h3 class="text-xl font-bold">Proizvodi</h3>
 
-            
-<button
-  type="button"
-  @click="openProductForm"
-  class="rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-orange-600"
->
-  + Dodaj proizvod
-</button>
-
+            <button
+              type="button"
+              @click="openProductForm()"
+              :disabled="categoryCount === 0"
+              class="rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              + Dodaj proizvod
+            </button>
           </div>
 
           <div class="divide-y divide-stone-100">
@@ -240,37 +350,54 @@ onMounted(loadDashboard)
               :key="product.id"
               class="flex flex-wrap items-center justify-between gap-4 p-5"
             >
-              <div>
-                <h4 class="font-semibold">{{ product.name }}</h4>
-                <p class="mt-1 text-sm text-stone-500">
-                  {{ product.categoryName }}
-                </p>
+              <!-- Fotografija i naziv -->
+              <div class="flex min-w-0 items-center gap-4">
+                <img
+                  v-if="product.image_url"
+                  :src="product.image_url"
+                  :alt="product.name"
+                  class="h-16 w-16 shrink-0 rounded-xl object-cover"
+                />
+
+                <div
+                  v-else
+                  class="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-stone-100 text-xs text-stone-400"
+                >
+                  Bez slike
+                </div>
+
+                <div class="min-w-0">
+                  <h4 class="font-semibold">
+                    {{ product.name }}
+                  </h4>
+
+                  <p class="mt-1 text-sm text-stone-500">
+                    {{ product.categoryName }}
+                  </p>
+                </div>
               </div>
 
+              <!-- Cijena i akcije -->
               <div class="flex items-center gap-5">
                 <span class="font-semibold text-orange-600">
                   {{ formatPrice(product.price) }}
                 </span>
 
-               
-<button
-  type="button"
-  @click="openProductForm(product)"
-  class="text-sm font-medium text-orange-600 hover:text-orange-700"
->
-  Uredi
-</button>
+                <button
+                  type="button"
+                  @click="openProductForm(product)"
+                  class="text-sm font-medium text-orange-600 hover:text-orange-700"
+                >
+                  Uredi
+                </button>
 
-
-               
-<button
-  type="button"
-  @click="deleteProduct(product)"
-  class="text-sm font-medium text-red-500 transition hover:text-red-700"
->
-  Obriši
-</button>
-
+                <button
+                  type="button"
+                  @click="deleteProduct(product)"
+                  class="text-sm font-medium text-red-500 hover:text-red-700"
+                >
+                  Obriši
+                </button>
               </div>
             </div>
 
@@ -284,123 +411,216 @@ onMounted(loadDashboard)
         </section>
       </template>
     </main>
-  </div>
-  
-<div
-  v-if="showProductForm"
-  class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
->
-  <div class="w-full max-w-lg rounded-3xl bg-white p-6 shadow-xl sm:p-8">
-    <div class="mb-6 flex items-center justify-between">
-     <h3 class="text-2xl font-bold">
-  {{ editingProductId !== null ? 'Uredi proizvod' : 'Novi proizvod' }}
-</h3>
 
-      <button
-        type="button"
-        @click="closeProductForm"
-        class="text-2xl text-stone-400 hover:text-stone-700"
-        aria-label="Zatvori obrazac"
+    <!-- MODAL ZA DODAVANJE I UREĐIVANJE -->
+    <div
+      v-if="showProductForm"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="product-modal-title"
+        class="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-xl sm:p-8"
       >
-        &times;
-      </button>
-    </div>
-
-    <form @submit.prevent="saveProduct" class="space-y-5">
-      <div>
-        <label for="product-name" class="mb-2 block text-sm font-medium">
-          Naziv proizvoda
-        </label>
-
-        <input
-          id="product-name"
-          v-model="productForm.name"
-          type="text"
-          required
-          maxlength="150"
-          placeholder="npr. Pizza Margherita"
-          class="w-full rounded-xl border border-stone-200 px-4 py-3 outline-none focus:border-orange-500"
-        />
-      </div>
-
-      <div>
-        <label for="product-category" class="mb-2 block text-sm font-medium">
-          Kategorija
-        </label>
-
-        <select
-          id="product-category"
-          v-model="productForm.category_id"
-          required
-          class="w-full rounded-xl border border-stone-200 bg-white px-4 py-3 outline-none focus:border-orange-500"
-        >
-          <option value="" disabled>Odaberi kategoriju</option>
-
-          <option
-            v-for="category in restaurant?.categories ?? []"
-            :key="category.id"
-            :value="category.id"
+        <div class="mb-6 flex items-center justify-between">
+          <h3
+            id="product-modal-title"
+            class="text-2xl font-bold"
           >
-            {{ category.name }}
-          </option>
-        </select>
-      </div>
+            {{
+              editingProductId !== null
+                ? 'Uredi proizvod'
+                : 'Novi proizvod'
+            }}
+          </h3>
 
-      <div>
-        <label for="product-description" class="mb-2 block text-sm font-medium">
-          Opis proizvoda
-        </label>
+          <button
+            type="button"
+            @click="closeProductForm"
+            :disabled="saving"
+            class="text-2xl text-stone-400 hover:text-stone-700 disabled:opacity-50"
+            aria-label="Zatvori obrazac"
+          >
+            &times;
+          </button>
+        </div>
 
-        <textarea
-          id="product-description"
-          v-model="productForm.description"
-          rows="3"
-          placeholder="Sastojci i opis proizvoda..."
-          class="w-full resize-none rounded-xl border border-stone-200 px-4 py-3 outline-none focus:border-orange-500"
-        ></textarea>
-      </div>
-
-      <div>
-        <label for="product-price" class="mb-2 block text-sm font-medium">
-          Cijena (€)
-        </label>
-
-        <input
-          id="product-price"
-          v-model="productForm.price"
-          type="number"
-          min="0.01"
-          max="99999999.99"
-          step="0.01"
-          required
-          placeholder="10.50"
-          class="w-full rounded-xl border border-stone-200 px-4 py-3 outline-none focus:border-orange-500"
-        />
-      </div>
-
-      <p v-if="formError" role="alert" class="text-sm text-red-600">
-        {{ formError }}
-      </p>
-
-      <div class="flex gap-3 pt-2">
-        <button
-          type="button"
-          @click="closeProductForm"
-          class="flex-1 rounded-xl border border-stone-200 px-4 py-3 font-medium hover:bg-stone-50"
+        <form
+          @submit.prevent="saveProduct"
+          class="space-y-5"
         >
-          Odustani
-        </button>
+          <!-- Naziv -->
+          <div>
+            <label
+              for="product-name"
+              class="mb-2 block text-sm font-medium"
+            >
+              Naziv proizvoda
+            </label>
 
-        <button
-          type="submit"
-          :disabled="saving"
-          class="flex-1 rounded-xl bg-orange-500 px-4 py-3 font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {{ saving ? 'Spremanje...' : editingProductId !== null ? 'Spremi promjene' : 'Dodaj proizvod' }}
-        </button>
+            <input
+              id="product-name"
+              v-model="productForm.name"
+              type="text"
+              required
+              maxlength="150"
+              placeholder="npr. Pizza Margherita"
+              class="w-full rounded-xl border border-stone-200 px-4 py-3 outline-none focus:border-orange-500"
+            />
+          </div>
+
+          <!-- Kategorija -->
+          <div>
+            <label
+              for="product-category"
+              class="mb-2 block text-sm font-medium"
+            >
+              Kategorija
+            </label>
+
+            <select
+              id="product-category"
+              v-model="productForm.category_id"
+              required
+              class="w-full rounded-xl border border-stone-200 bg-white px-4 py-3 outline-none focus:border-orange-500"
+            >
+              <option value="" disabled>
+                Odaberi kategoriju
+              </option>
+
+              <option
+                v-for="category in restaurant?.categories ?? []"
+                :key="category.id"
+                :value="category.id"
+              >
+                {{ category.name }}
+              </option>
+            </select>
+          </div>
+
+          <!-- Opis -->
+          <div>
+            <label
+              for="product-description"
+              class="mb-2 block text-sm font-medium"
+            >
+              Opis proizvoda
+            </label>
+
+            <textarea
+              id="product-description"
+              v-model="productForm.description"
+              rows="3"
+              placeholder="Sastojci i opis proizvoda..."
+              class="w-full resize-none rounded-xl border border-stone-200 px-4 py-3 outline-none focus:border-orange-500"
+            ></textarea>
+          </div>
+
+          <!-- Cijena -->
+          <div>
+            <label
+              for="product-price"
+              class="mb-2 block text-sm font-medium"
+            >
+              Cijena (€)
+            </label>
+
+            <input
+              id="product-price"
+              v-model="productForm.price"
+              type="number"
+              min="0.01"
+              max="99999999.99"
+              step="0.01"
+              required
+              placeholder="10.50"
+              class="w-full rounded-xl border border-stone-200 px-4 py-3 outline-none focus:border-orange-500"
+            />
+          </div>
+
+          <!-- Postojeća fotografija -->
+          <div v-if="currentImageUrl">
+            <p class="mb-2 text-sm font-medium">
+              Trenutačna fotografija
+            </p>
+
+            <img
+              :src="currentImageUrl"
+              alt="Trenutačna fotografija proizvoda"
+              class="h-28 w-28 rounded-xl object-cover"
+            />
+          </div>
+
+          <!-- Nova fotografija -->
+          <div>
+            <label
+              for="product-image"
+              class="mb-2 block text-sm font-medium"
+            >
+              {{
+                currentImageUrl
+                  ? 'Promijeni fotografiju (neobavezno)'
+                  : 'Fotografija proizvoda (neobavezno)'
+              }}
+            </label>
+
+            <input
+              id="product-image"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              @change="handleImageChange"
+              class="block w-full rounded-xl border border-stone-200 bg-white p-3 text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-orange-50 file:px-4 file:py-2 file:font-medium file:text-orange-600"
+            />
+
+            <p class="mt-2 text-xs text-stone-400">
+              JPG, PNG ili WebP. Maksimalno 5 MB.
+            </p>
+
+            <p
+              v-if="selectedImage"
+              class="mt-2 text-sm text-orange-600"
+            >
+              Odabrana fotografija: {{ selectedImage.name }}
+            </p>
+          </div>
+
+          <!-- Greška -->
+          <p
+            v-if="formError"
+            role="alert"
+            class="text-sm text-red-600"
+          >
+            {{ formError }}
+          </p>
+
+          <!-- Gumbi -->
+          <div class="flex gap-3 pt-2">
+            <button
+              type="button"
+              @click="closeProductForm"
+              :disabled="saving"
+              class="flex-1 rounded-xl border border-stone-200 px-4 py-3 font-medium hover:bg-stone-50 disabled:opacity-50"
+            >
+              Odustani
+            </button>
+
+            <button
+              type="submit"
+              :disabled="saving || !!formError"
+              class="flex-1 rounded-xl bg-orange-500 px-4 py-3 font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {{
+                saving
+                  ? 'Spremanje...'
+                  : editingProductId !== null
+                    ? 'Spremi promjene'
+                    : 'Dodaj proizvod'
+              }}
+            </button>
+          </div>
+        </form>
       </div>
-    </form>
+    </div>
   </div>
-</div>
-
 </template>
