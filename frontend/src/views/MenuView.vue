@@ -126,27 +126,41 @@ onMounted(loadMenu)
           </h3>
 
           <div class="grid gap-4 md:grid-cols-2">
-            <article
-              v-for="product in category.products"
-              :key="product.id"
-              class="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm transition hover:shadow-md"
-            >
-              <div class="flex items-start justify-between gap-4">
-                <div>
-                  <h4 class="text-lg font-semibold">
-                    {{ product.name }}
-                  </h4>
+            
+<article
+  v-for="product in category.products"
+  :key="product.id"
+  class="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition hover:shadow-md"
+>
+  <div class="flex h-full flex-col sm:flex-row">
+    <!-- Fotografija proizvoda -->
+    <img
+      v-if="product.image_url"
+      :src="product.image_url"
+      :alt="product.name"
+      loading="lazy"
+      class="h-48 w-full object-cover sm:h-auto sm:w-40"
+    />
 
-                  <p class="mt-2 text-sm leading-relaxed text-stone-500">
-                    {{ product.description }}
-                  </p>
-                </div>
+    <!-- Informacije o proizvodu -->
+    <div class="flex flex-1 flex-col justify-between p-5">
+      <div>
+        <h4 class="text-lg font-semibold">
+          {{ product.name }}
+        </h4>
 
-                <span class="shrink-0 font-bold text-orange-600">
-                  {{ formatPrice(product.price) }}
-                </span>
-              </div>
-            </article>
+        <p class="mt-2 text-sm leading-relaxed text-stone-500">
+          {{ product.description }}
+        </p>
+      </div>
+
+      <p class="mt-4 text-lg font-bold text-orange-600">
+        {{ formatPrice(product.price) }}
+      </p>
+    </div>
+  </div>
+</article>
+
           </div>
         </section>
       </template>
