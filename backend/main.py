@@ -8,8 +8,8 @@ from database import get_db
 from models import Restaurant
 from schemas import RestaurantCreate, RestaurantResponse
 from fastapi import HTTPException
-from models import Category
-from schemas import CategoryCreate, CategoryResponse
+from models import Category, Product
+from schemas import CategoryCreate, CategoryResponse, ProductCreate, ProductResponse
 app = FastAPI(
     title="Dineria API",
     version="1.0.0"
@@ -98,3 +98,30 @@ def create_category(
     db.refresh(new_category)
 
     return new_category
+
+
+@app.post("/api/products", response_model=ProductResponse, status_code=201)
+def create_product(
+    product: ProductCreate,
+    db: Session = Depends(get_db)
+):
+    category = db.get(Category, product.category_id)
+
+    if category is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Category not found"
+        )
+
+    new_product = Product(
+        name=product.name,
+        description=product.description,
+        price=product.price,
+        category_id=product.category_id
+    )
+
+    db.add(new_product)
+    db.commit()
+    db.refresh(new_product)
+
+    return new_product
