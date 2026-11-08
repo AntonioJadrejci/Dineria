@@ -220,8 +220,8 @@ async function uploadProductImage(productId) {
   const formData = new FormData()
   formData.append('file', selectedImage.value)
 
-  const response = await fetch(
-    `${API_URL}/api/products/${productId}/image`,
+  const response = await apiFetch(
+    `/api/products/${productId}/image`,
     {
       method: 'POST',
       body: formData
@@ -246,10 +246,10 @@ async function saveProduct() {
     const isEditing = editingProductId.value !== null
 
     const url = isEditing
-      ? `${API_URL}/api/products/${editingProductId.value}`
-      : `${API_URL}/api/products`
+      ? `/api/products/${editingProductId.value}`
+      : `/api/products`
 
-    const response = await fetch(url, {
+    const response = await apiFetch(url, {
       method: isEditing ? 'PATCH' : 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -305,8 +305,8 @@ async function deleteProduct(product) {
   if (!confirmed) return
 
   try {
-    const response = await fetch(
-      `${API_URL}/api/products/${product.id}`,
+    const response = await apiFetch(
+      `/api/products/${product.id}`,
       {
         method: 'DELETE'
       }
@@ -354,8 +354,8 @@ async function saveCategory() {
     const isEditing = editingCategoryId.value !== null
 
     const url = isEditing
-      ? `${API_URL}/api/categories/${editingCategoryId.value}`
-      : `${API_URL}/api/categories`
+      ? `/api/categories/${editingCategoryId.value}`
+      : `/api/categories`
 
     const body = isEditing
       ? { name }
@@ -364,7 +364,7 @@ async function saveCategory() {
           restaurant_id: restaurant.value.id
         }
 
-    const response = await fetch(url, {
+    const response = await apiFetch(url, {
       method: isEditing ? 'PATCH' : 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -400,8 +400,8 @@ async function deleteCategory(category) {
   if (!confirmed) return
 
   try {
-    const response = await fetch(
-      `${API_URL}/api/categories/${category.id}`,
+    const response = await apiFetch(
+      `/api/categories/${category.id}`,
       { method: 'DELETE' }
     )
 
@@ -434,7 +434,8 @@ onMounted(loadDashboard)
         </h1>
 
         <RouterLink
-          :to="restaurantSlug ? `/menu/${restaurantSlug}` : '/admin'"
+          v-if="restaurantSlug"
+          :to="`/menu/${restaurantSlug}`"
           class="text-sm font-medium text-orange-600 hover:text-orange-700"
         >
           Pogledaj jelovnik
