@@ -1,10 +1,10 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { apiFetch } from '../services/api'
+import { apiFetch, API_URL } from '../services/api'
 import QRCode from 'qrcode'
 
-const API_URL = 'http://127.0.0.1:8000'
+
 const restaurantSlug = computed(() => restaurant.value?.slug ?? '')
 const hasNoRestaurant = ref(false)
 const creatingRestaurant = ref(false)
