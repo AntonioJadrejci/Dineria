@@ -1,9 +1,19 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { apiFetch } from '../services/api'
 
 const API_URL = 'http://127.0.0.1:8000'
-const RESTAURANT_SLUG = 'dineria-demo'
+const restaurantSlug = computed(() => restaurant.value?.slug ?? '')
+const hasNoRestaurant = ref(false)
+const creatingRestaurant = ref(false)
+const restaurantFormError = ref('')
+
+const restaurantForm = ref({
+  name: '',
+  slug: '',
+  description: ''
+})
 
 const restaurant = ref(null)
 const loading = ref(true)
@@ -33,13 +43,33 @@ const categoryError = ref('')
 
 
 // Dohvaćanje podataka restorana
+
 async function loadDashboard() {
   loading.value = true
   error.value = ''
+  hasNoRestaurant.value = false
 
   try {
+    // Pronađi restorane prijavljenog korisnika
+    const myRestaurantsResponse = await apiFetch('/api/my/restaurants')
+
+    if (!myRestaurantsResponse.ok) {
+      throw new Error('Nije moguće dohvatiti tvoje restorane.')
+    }
+
+    const myRestaurants = await myRestaurantsResponse.json()
+
+    if (myRestaurants.length === 0) {
+      restaurant.value = null
+      hasNoRestaurant.value = true
+      return
+    }
+
+    // Zasad prikazujemo prvi restoran korisnika
+    const slug = myRestaurants[0].slug
+
     const response = await fetch(
-      `${API_URL}/api/restaurants/${RESTAURANT_SLUG}/menu`
+      `${API_URL}/api/restaurants/${encodeURIComponent(slug)}/menu`
     )
 
     if (!response.ok) {
@@ -48,11 +78,51 @@ async function loadDashboard() {
 
     restaurant.value = await response.json()
   } catch (err) {
+    restaurant.value = null
     error.value = err.message
   } finally {
     loading.value = false
   }
 }
+
+
+async function createRestaurant() {
+  if (creatingRestaurant.value) return
+
+  creatingRestaurant.value = true
+  restaurantFormError.value = ''
+
+  try {
+    const response = await apiFetch('/api/restaurants', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        name: restaurantForm.value.name.trim(),
+        slug: restaurantForm.value.slug.trim().toLowerCase(),
+        description: restaurantForm.value.description.trim()
+      })
+    })
+
+    if (response.status === 409) {
+      throw new Error('Ova URL oznaka restorana već postoji. Odaberi drugu.')
+    }
+
+    if (!response.ok) {
+      throw new Error('Kreiranje restorana nije uspjelo.')
+    }
+
+    // Ponovno učitaj dashboard novog restorana
+    await loadDashboard()
+  } catch (err) {
+    restaurantFormError.value = err.message
+  } finally {
+    creatingRestaurant.value = false
+  }
+}
+
+
 
 // Pretvaranje kategorija u jedinstveni popis proizvoda
 const products = computed(() => {
@@ -364,7 +434,7 @@ onMounted(loadDashboard)
         </h1>
 
         <RouterLink
-          :to="`/menu/${RESTAURANT_SLUG}`"
+          :to="restaurantSlug ? `/menu/${restaurantSlug}` : '/admin'"
           class="text-sm font-medium text-orange-600 hover:text-orange-700"
         >
           Pogledaj jelovnik
@@ -381,6 +451,91 @@ onMounted(loadDashboard)
       <p v-else-if="error" class="text-red-600">
         {{ error }}
       </p>
+
+      
+<div
+  v-else-if="hasNoRestaurant"
+  class="mx-auto max-w-xl rounded-3xl border border-stone-200 bg-white p-8 shadow-sm"
+>
+  <div class="mb-8 text-center">
+    <h2 class="text-3xl font-bold">
+      Dobrodošao u Dineriju!
+    </h2>
+
+    <p class="mt-3 text-stone-500">
+      Kreiraj svoj restoran i počni uređivati digitalni jelovnik.
+    </p>
+  </div>
+
+  <form @submit.prevent="createRestaurant" class="space-y-5">
+    <div>
+      <label class="mb-2 block text-sm font-medium">
+        Naziv restorana
+      </label>
+
+      <input
+        v-model="restaurantForm.name"
+        type="text"
+        required
+        maxlength="150"
+        placeholder="npr. Pizzeria Roma"
+        class="w-full rounded-xl border border-stone-200 px-4 py-3 outline-none focus:border-orange-500"
+      />
+    </div>
+
+    <div>
+      <label class="mb-2 block text-sm font-medium">
+        URL oznaka restorana
+      </label>
+
+      <input
+        v-model="restaurantForm.slug"
+        type="text"
+        required
+        pattern="[a-z0-9]+(-[a-z0-9]+)*"
+        maxlength="150"
+        placeholder="npr. pizzeria-roma"
+        class="w-full rounded-xl border border-stone-200 px-4 py-3 outline-none focus:border-orange-500"
+      />
+
+      <p class="mt-2 text-xs text-stone-400">
+        Koristi mala slova, brojeve i crtice, bez razmaka.
+        Primjer: pizzeria-roma
+      </p>
+    </div>
+
+    <div>
+      <label class="mb-2 block text-sm font-medium">
+        Opis restorana (neobavezno)
+      </label>
+
+      <textarea
+        v-model="restaurantForm.description"
+        rows="3"
+        maxlength="1000"
+        placeholder="Kratki opis restorana..."
+        class="w-full resize-none rounded-xl border border-stone-200 px-4 py-3 outline-none focus:border-orange-500"
+      ></textarea>
+    </div>
+
+    <p
+      v-if="restaurantFormError"
+      role="alert"
+      class="text-sm text-red-600"
+    >
+      {{ restaurantFormError }}
+    </p>
+
+    <button
+      type="submit"
+      :disabled="creatingRestaurant"
+      class="w-full rounded-xl bg-orange-500 px-4 py-3 font-semibold text-white transition hover:bg-orange-600 disabled:opacity-50"
+    >
+      {{ creatingRestaurant ? 'Kreiranje...' : 'Kreiraj restoran' }}
+    </button>
+  </form>
+</div>
+
 
       <template v-else-if="restaurant">
         <!-- Naslov -->

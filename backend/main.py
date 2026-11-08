@@ -276,3 +276,24 @@ def delete_category(
     db.delete(category)
     db.commit()
     return {"message": "Category deleted successfully"}
+
+
+
+@app.get("/api/my/restaurants", response_model=list[RestaurantResponse])
+def get_my_restaurants(
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    statement = (
+        select(Restaurant)
+        .join(
+            RestaurantAdmin,
+            RestaurantAdmin.restaurant_id == Restaurant.id
+        )
+        .where(RestaurantAdmin.user_id == UUID(str(user.id)))
+        .order_by(Restaurant.id)
+    )
+
+    restaurants = db.scalars(statement).all()
+
+    return restaurants
