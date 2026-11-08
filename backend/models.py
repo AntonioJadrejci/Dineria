@@ -1,13 +1,7 @@
-
 from decimal import Decimal
 
-from sqlalchemy import (
-    ForeignKey,
-    Integer,
-    Numeric,
-    String,
-    Text,
-)
+from sqlalchemy import Column, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -69,3 +63,15 @@ class Product(Base):
     category: Mapped["Category"] = relationship(
         back_populates="products"
     )
+
+
+class RestaurantAdmin(Base):
+    __tablename__ = "restaurant_admins"
+
+    id = Column(Integer, primary_key=True, index=True)
+    restaurant_id = Column(
+        Integer,
+        ForeignKey("restaurants.id"),
+        nullable=False
+    )
+    user_id = Column(UUID(as_uuid=True), nullable=False)
