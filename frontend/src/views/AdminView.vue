@@ -23,6 +23,15 @@ const productForm = ref({
   category_id: ''
 })
 
+
+const showCategoryForm = ref(false)
+const editingCategoryId = ref(null)
+const categoryName = ref('')
+const categorySaving = ref(false)
+const categoryError = ref('')
+
+
+
 // Dohvaćanje podataka restorana
 async function loadDashboard() {
   loading.value = true
@@ -243,6 +252,100 @@ async function deleteProduct(product) {
   }
 }
 
+
+function openCategoryForm(category = null) {
+  editingCategoryId.value = category?.id ?? null
+  categoryName.value = category?.name ?? ''
+  categoryError.value = ''
+  showCategoryForm.value = true
+}
+
+function closeCategoryForm() {
+  if (categorySaving.value) return
+
+  showCategoryForm.value = false
+  categoryError.value = ''
+}
+
+async function saveCategory() {
+  if (categorySaving.value) return
+
+  const name = categoryName.value.trim()
+
+  if (!name) {
+    categoryError.value = 'Unesi naziv kategorije.'
+    return
+  }
+
+  categorySaving.value = true
+  categoryError.value = ''
+
+  try {
+    const isEditing = editingCategoryId.value !== null
+
+    const url = isEditing
+      ? `${API_URL}/api/categories/${editingCategoryId.value}`
+      : `${API_URL}/api/categories`
+
+    const body = isEditing
+      ? { name }
+      : {
+          name,
+          restaurant_id: restaurant.value.id
+        }
+
+    const response = await fetch(url, {
+      method: isEditing ? 'PATCH' : 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    })
+
+    if (!response.ok) {
+      throw new Error('Spremanje kategorije nije uspjelo.')
+    }
+
+    showCategoryForm.value = false
+    await loadDashboard()
+  } catch (err) {
+    categoryError.value = err.message
+  } finally {
+    categorySaving.value = false
+  }
+}
+
+async function deleteCategory(category) {
+  if (category.products.length > 0) {
+    window.alert(
+      'Ne možeš obrisati kategoriju koja sadrži proizvode.'
+    )
+    return
+  }
+
+  const confirmed = window.confirm(
+    `Želiš li obrisati kategoriju "${category.name}"?`
+  )
+
+  if (!confirmed) return
+
+  try {
+    const response = await fetch(
+      `${API_URL}/api/categories/${category.id}`,
+      { method: 'DELETE' }
+    )
+
+    if (!response.ok) {
+      throw new Error('Brisanje kategorije nije uspjelo.')
+    }
+
+    await loadDashboard()
+  } catch (err) {
+    window.alert(err.message)
+  }
+}
+
+
 onMounted(loadDashboard)
 </script>
 
@@ -324,6 +427,68 @@ onMounted(loadDashboard)
             </p>
           </div>
         </div>
+
+<!-- KATEGORIJE -->
+<section
+  class="mb-8 overflow-hidden rounded-2xl border border-stone-200 bg-white"
+>
+  <div
+    class="flex flex-wrap items-center justify-between gap-4 border-b border-stone-200 p-6"
+  >
+    <h3 class="text-xl font-bold">Kategorije</h3>
+
+    <button
+      type="button"
+      @click="openCategoryForm()"
+      class="rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
+    >
+      + Dodaj kategoriju
+    </button>
+  </div>
+
+  <div class="divide-y divide-stone-100">
+    <div
+      v-for="category in restaurant.categories"
+      :key="category.id"
+      class="flex flex-wrap items-center justify-between gap-4 p-5"
+    >
+      <div>
+        <h4 class="font-semibold">
+          {{ category.name }}
+        </h4>
+
+        <p class="mt-1 text-sm text-stone-500">
+          {{ category.products.length }} proizvoda
+        </p>
+      </div>
+
+      <div class="flex items-center gap-5">
+        <button
+          type="button"
+          @click="openCategoryForm(category)"
+          class="text-sm font-medium text-orange-600 hover:text-orange-700"
+        >
+          Uredi
+        </button>
+
+        <button
+          type="button"
+          @click="deleteCategory(category)"
+          class="text-sm font-medium text-red-500 hover:text-red-700"
+        >
+          Obriši
+        </button>
+      </div>
+    </div>
+
+    <p
+      v-if="restaurant.categories.length === 0"
+      class="p-6 text-sm text-stone-500"
+    >
+      Još nema kategorija.
+    </p>
+  </div>
+</section>
 
         <!-- Popis proizvoda -->
         <section
@@ -622,5 +787,90 @@ onMounted(loadDashboard)
         </form>
       </div>
     </div>
+    
+<!-- MODAL ZA KATEGORIJE -->
+<div
+  v-if="showCategoryForm"
+  class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+>
+  <div
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="category-modal-title"
+    class="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl"
+  >
+    <div class="mb-6 flex items-center justify-between">
+      <h3
+        id="category-modal-title"
+        class="text-2xl font-bold"
+      >
+        {{
+          editingCategoryId !== null
+            ? 'Uredi kategoriju'
+            : 'Nova kategorija'
+        }}
+      </h3>
+
+      <button
+        type="button"
+        @click="closeCategoryForm"
+        :disabled="categorySaving"
+        class="text-2xl text-stone-400 disabled:opacity-50"
+        aria-label="Zatvori obrazac"
+      >
+        &times;
+      </button>
+    </div>
+
+    <form @submit.prevent="saveCategory" class="space-y-5">
+      <div>
+        <label
+          for="category-name"
+          class="mb-2 block text-sm font-medium"
+        >
+          Naziv kategorije
+        </label>
+
+        <input
+          id="category-name"
+          v-model="categoryName"
+          type="text"
+          required
+          maxlength="100"
+          placeholder="npr. Deserti"
+          class="w-full rounded-xl border border-stone-200 px-4 py-3 outline-none focus:border-orange-500"
+        />
+      </div>
+
+      <p
+        v-if="categoryError"
+        role="alert"
+        class="text-sm text-red-600"
+      >
+        {{ categoryError }}
+      </p>
+
+      <div class="flex gap-3">
+        <button
+          type="button"
+          @click="closeCategoryForm"
+          :disabled="categorySaving"
+          class="flex-1 rounded-xl border border-stone-200 px-4 py-3 font-medium disabled:opacity-50"
+        >
+          Odustani
+        </button>
+
+        <button
+          type="submit"
+          :disabled="categorySaving"
+          class="flex-1 rounded-xl bg-orange-500 px-4 py-3 font-semibold text-white hover:bg-orange-600 disabled:opacity-50"
+        >
+          {{ categorySaving ? 'Spremanje...' : 'Spremi' }}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
   </div>
 </template>
