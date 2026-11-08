@@ -19,6 +19,11 @@ class CategoryCreate(BaseModel):
     name: str
     restaurant_id: int
 
+    
+class CategoryUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+
+
 
 class CategoryResponse(CategoryCreate):
     id: int

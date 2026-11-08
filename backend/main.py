@@ -17,6 +17,7 @@ from schemas import (
     RestaurantResponse,
     CategoryCreate,
     CategoryResponse,
+    CategoryUpdate,
     ProductCreate,
     ProductResponse,
     ProductUpdate,
@@ -346,4 +347,63 @@ async def upload_product_image(
     db.refresh(product)
 
     return product
+
+
+@app.patch(
+    "/api/categories/{category_id}",
+    response_model=CategoryResponse
+)
+def update_category(
+    category_id: int,
+    category_data: CategoryUpdate,
+    db: Session = Depends(get_db)
+):
+    category = db.get(Category, category_id)
+
+    if category is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Category not found"
+        )
+
+    category.name = category_data.name.strip()
+
+    if not category.name:
+        raise HTTPException(
+            status_code=422,
+            detail="Category name cannot be empty"
+        )
+
+    db.commit()
+    db.refresh(category)
+
+    return category
+
+
+@app.delete("/api/categories/{category_id}")
+def delete_category(
+    category_id: int,
+    db: Session = Depends(get_db)
+):
+    category = db.get(Category, category_id)
+
+    if category is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Category not found"
+        )
+
+    if category.products:
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot delete a category that contains products"
+        )
+
+    db.delete(category)
+    db.commit()
+
+    return {
+        "message": "Category deleted successfully"
+    }
+
 
