@@ -2,6 +2,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { apiFetch } from '../services/api'
+import QRCode from 'qrcode'
 
 const API_URL = 'http://127.0.0.1:8000'
 const restaurantSlug = computed(() => restaurant.value?.slug ?? '')
@@ -40,7 +41,42 @@ const categoryName = ref('')
 const categorySaving = ref(false)
 const categoryError = ref('')
 
+const qrCodeDataUrl = ref('')
+const qrError = ref('')
 
+const menuUrl = computed(() => {
+  if (!restaurant.value?.slug) return ''
+
+  return `${window.location.origin}/menu/${encodeURIComponent(restaurant.value.slug)}`
+})
+
+async function generateQrCode() {
+  if (!menuUrl.value) return
+
+  qrError.value = ''
+
+  try {
+    qrCodeDataUrl.value = await QRCode.toDataURL(menuUrl.value, {
+      width: 600,
+      margin: 2,
+      color: {
+        dark: '#292524',
+        light: '#FFFFFF'
+      }
+    })
+  } catch {
+    qrError.value = 'Nije moguće generirati QR kod.'
+  }
+}
+
+function downloadQrCode() {
+  if (!qrCodeDataUrl.value) return
+
+  const link = document.createElement('a')
+  link.href = qrCodeDataUrl.value
+  link.download = `dineria-${restaurant.value.slug}-qr.png`
+  link.click()
+}
 
 // Dohvaćanje podataka restorana
 
@@ -77,6 +113,7 @@ async function loadDashboard() {
     }
 
     restaurant.value = await response.json()
+    await generateQrCode()
   } catch (err) {
     restaurant.value = null
     error.value = err.message
@@ -583,6 +620,54 @@ onMounted(loadDashboard)
             </p>
           </div>
         </div>
+
+        
+<!-- QR KOD RESTORANA -->
+<section
+  class="mb-8 rounded-2xl border border-stone-200 bg-white p-6"
+>
+  <div class="flex flex-col items-center gap-6 sm:flex-row">
+    <div
+      class="flex h-44 w-44 shrink-0 items-center justify-center rounded-2xl border border-stone-200 bg-white p-3"
+    >
+      <img
+        v-if="qrCodeDataUrl"
+        :src="qrCodeDataUrl"
+        alt="QR kod jelovnika restorana"
+        class="h-full w-full object-contain"
+      />
+      <span v-else class="text-center text-sm text-stone-400">
+        Generiranje QR koda...
+      </span>
+    </div>
+
+    <div class="min-w-0 flex-1">
+      <h3 class="text-xl font-bold">QR kod restorana</h3>
+
+      <p class="mt-2 text-sm text-stone-500">
+        Preuzmi QR kod, ispiši ga i postavi na stolove.
+        Gosti skeniranjem odmah otvaraju tvoj digitalni jelovnik.
+      </p>
+
+      <p class="mt-3 break-all text-xs text-stone-400">
+        {{ menuUrl }}
+      </p>
+
+      <p v-if="qrError" class="mt-2 text-sm text-red-600">
+        {{ qrError }}
+      </p>
+
+      <button
+        type="button"
+        :disabled="!qrCodeDataUrl"
+        @click="downloadQrCode"
+        class="mt-5 rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-orange-600 disabled:opacity-50"
+      >
+        Preuzmi QR kod (PNG)
+      </button>
+    </div>
+  </div>
+</section>
 
 <!-- KATEGORIJE -->
 <section
