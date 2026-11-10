@@ -6,6 +6,8 @@ Dineria is a full-stack web application designed to help restaurants create, man
 
 The platform provides restaurant owners with an intuitive dashboard for managing their menus, while customers can easily browse them on any device without downloading an app.
 
+**Language:** The application interface is currently available in Croatian, as Dineria was initially developed for the Croatian restaurant market.
+
 ## Features
 
 - **User Authentication** – Secure registration and login for restaurant administrators.
@@ -40,3 +42,41 @@ The platform provides restaurant owners with an intuitive dashboard for managing
 Dineria was developed to provide a simple and practical solution for digital restaurant menus, combining an easy-to-use management interface with a convenient browsing experience for customers.
 
 The project demonstrates full-stack web development, REST API integration, user authentication, database management, and cloud deployment.
+
+## Screenshots
+
+### Desktop
+
+**Homepage**
+
+![Dineria Homepage](Screenshots/Dineriaprez.png)
+
+**Admin Dashboard**
+
+![Dineria Admin Dashboard](Screenshots/Dineriaprez2.png)
+
+**Digital Menu**
+
+![Dineria Digital Menu](Screenshots/Dineria3.png)
+
+**Product Editing**
+
+![Dineria Product Editing](Screenshots/Dineriaprez4.png)
+
+### Mobile
+
+**Homepage**
+
+![Dineria Mobile Homepage](Screenshots/DineriaMob.png)
+
+**Digital Menu**
+
+![Dineria Mobile Digital Menu](Screenshots/DineriaMob2.png)
+
+**Login**
+
+![Dineria Mobile Login](Screenshots/DineriaMob3.png)
+
+**Registration**
+
+![Dineria Mobile Registration](Screenshots/DineriaMob4.png)
