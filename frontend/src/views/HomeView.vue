@@ -1,5 +1,23 @@
 <script setup>
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { supabase } from '../lib/supabase'
+import { useAuth } from '../composables/useAuth'
+
+const router = useRouter()
+const { user, authReady } = useAuth()
+const signingOut = ref(false)
+
+async function logout() {
+  if (signingOut.value) return
+  signingOut.value = true
+  const { error } = await supabase.auth.signOut()
+  signingOut.value = false
+  if (error) { window.alert('Odjava nije uspjela.'); return }
+  sessionStorage.removeItem('dineria-selected-restaurant')
+  mobileMenuOpen.value = false
+  await router.push('/')
+}
 
 const mobileMenuOpen = ref(false)
 
@@ -36,8 +54,14 @@ const features = [
         <div class="hidden items-center gap-8 md:flex">
           <a href="#prednosti" class="text-sm font-medium text-stone-600 transition hover:text-orange-600">Prednosti</a>
           <a href="#kako-radi" class="text-sm font-medium text-stone-600 transition hover:text-orange-600">Kako radi</a>
-          <RouterLink to="/login" class="text-sm font-semibold text-stone-700 transition hover:text-orange-600">Prijava</RouterLink>
-          <RouterLink to="/register" class="rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-600">Započni besplatno</RouterLink>
+          <template v-if="authReady && user">
+            <RouterLink to="/admin" class="text-sm font-semibold text-stone-700 transition hover:text-orange-600">Dashboard</RouterLink>
+            <button type="button" :disabled="signingOut" @click="logout" class="text-sm font-semibold text-red-600 hover:text-red-700 disabled:opacity-50">{{ signingOut ? 'Odjava...' : 'Odjava' }}</button>
+          </template>
+          <template v-else-if="authReady">
+            <RouterLink to="/login" class="text-sm font-semibold text-stone-700 transition hover:text-orange-600">Prijava</RouterLink>
+            <RouterLink to="/register" class="rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-600">Započni besplatno</RouterLink>
+          </template>
         </div>
 
         <button type="button" class="rounded-lg border border-stone-200 p-2 text-stone-700 md:hidden" :aria-expanded="mobileMenuOpen" aria-label="Otvori izbornik" @click="mobileMenuOpen = !mobileMenuOpen">
@@ -51,8 +75,14 @@ const features = [
       <div v-if="mobileMenuOpen" class="flex flex-col gap-4 border-t border-stone-200 bg-white px-5 py-5 md:hidden">
         <a href="#prednosti" class="text-sm font-medium" @click="mobileMenuOpen = false">Prednosti</a>
         <a href="#kako-radi" class="text-sm font-medium" @click="mobileMenuOpen = false">Kako radi</a>
-        <RouterLink to="/login" class="text-sm font-medium" @click="mobileMenuOpen = false">Prijava</RouterLink>
-        <RouterLink to="/register" class="rounded-xl bg-orange-500 px-4 py-3 text-center text-sm font-semibold text-white" @click="mobileMenuOpen = false">Započni besplatno</RouterLink>
+        <template v-if="authReady && user">
+          <RouterLink to="/admin" class="text-sm font-medium" @click="mobileMenuOpen = false">Dashboard</RouterLink>
+          <button type="button" :disabled="signingOut" class="text-left text-sm font-semibold text-red-600" @click="logout">{{ signingOut ? 'Odjava...' : 'Odjava' }}</button>
+        </template>
+        <template v-else-if="authReady">
+          <RouterLink to="/login" class="text-sm font-medium" @click="mobileMenuOpen = false">Prijava</RouterLink>
+          <RouterLink to="/register" class="rounded-xl bg-orange-500 px-4 py-3 text-center text-sm font-semibold text-white" @click="mobileMenuOpen = false">Započni besplatno</RouterLink>
+        </template>
       </div>
     </header>
 
@@ -74,8 +104,8 @@ const features = [
               Kreirajte moderan digitalni jelovnik, uredite ponudu u nekoliko klikova i omogućite gostima da je pregledaju putem QR koda.
             </p>
             <div class="mt-9 flex flex-col gap-3 sm:flex-row">
-              <RouterLink to="/register" class="inline-flex items-center justify-center gap-2 rounded-xl bg-orange-500 px-7 py-4 text-sm font-bold text-white shadow-lg shadow-orange-500/20 transition hover:-translate-y-0.5 hover:bg-orange-600">
-                Kreiraj svoj jelovnik <span aria-hidden="true">→</span>
+              <RouterLink :to="user ? '/admin' : '/register'" class="inline-flex items-center justify-center gap-2 rounded-xl bg-orange-500 px-7 py-4 text-sm font-bold text-white shadow-lg shadow-orange-500/20 transition hover:-translate-y-0.5 hover:bg-orange-600">
+                {{ user ? 'Otvori dashboard' : 'Kreiraj svoj jelovnik' }} <span aria-hidden="true">→</span>
               </RouterLink>
               <RouterLink to="/menu/dineria-demo" class="inline-flex items-center justify-center gap-2 rounded-xl border border-stone-300 bg-white px-7 py-4 text-sm font-bold text-stone-800 transition hover:border-orange-300 hover:text-orange-600">
                 Pogledaj demo jelovnik <span aria-hidden="true">↗</span>
@@ -164,7 +194,7 @@ const features = [
           <p class="text-sm font-bold uppercase tracking-widest text-orange-400">Spremni za digitalni jelovnik?</p>
           <h2 class="mt-5 text-3xl font-extrabold leading-tight sm:text-5xl">Vaš restoran zaslužuje jednostavniji način rada.</h2>
           <p class="mx-auto mt-6 max-w-xl text-stone-300">Otvorite račun i počnite izrađivati jelovnik svojeg restorana.</p>
-          <RouterLink to="/register" class="mt-9 inline-flex items-center justify-center rounded-xl bg-orange-500 px-8 py-4 text-sm font-bold text-white transition hover:bg-orange-600">Započni besplatno →</RouterLink>
+          <RouterLink :to="user ? '/admin' : '/register'" class="mt-9 inline-flex items-center justify-center rounded-xl bg-orange-500 px-8 py-4 text-sm font-bold text-white transition hover:bg-orange-600">{{ user ? 'Otvori dashboard →' : 'Započni besplatno →' }}</RouterLink>
         </div>
       </section>
     </main>
@@ -173,7 +203,7 @@ const features = [
       <div class="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-5 py-7 text-sm text-stone-500 sm:flex-row sm:px-8">
         <RouterLink to="/" class="text-xl font-extrabold text-stone-900">dineria<span class="text-orange-500">.</span></RouterLink>
         <p>Digitalni jelovnici, jednostavno.</p>
-        <div class="flex gap-5"><RouterLink to="/login" class="hover:text-orange-600">Prijava</RouterLink><RouterLink to="/register" class="hover:text-orange-600">Registracija</RouterLink></div>
+        <div v-if="authReady" class="flex gap-5"><template v-if="user"><RouterLink to="/admin" class="hover:text-orange-600">Dashboard</RouterLink><button type="button" :disabled="signingOut" @click="logout" class="hover:text-red-600">Odjava</button></template><template v-else><RouterLink to="/login" class="hover:text-orange-600">Prijava</RouterLink><RouterLink to="/register" class="hover:text-orange-600">Registracija</RouterLink></template></div>
       </div>
     </footer>
   </div>

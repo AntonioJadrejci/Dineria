@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { apiFetch, API_URL } from '../services/api'
 import QRCode from 'qrcode'
+import AppHeader from '../components/AppHeader.vue'
 
 
 const restaurantSlug = computed(() => restaurant.value?.slug ?? '')
@@ -479,27 +480,7 @@ onMounted(loadDashboard)
 
 <template>
   <div class="min-h-screen bg-stone-50 text-stone-900">
-    <!-- HEADER -->
-    <header class="border-b border-stone-200 bg-white">
-      <div
-        class="mx-auto flex max-w-6xl items-center justify-between px-5 py-5"
-      >
-        <h1 class="text-2xl font-extrabold">
-          dineria<span class="text-orange-500">.</span>
-          <span class="ml-2 text-sm font-medium text-stone-400">
-            Admin
-          </span>
-        </h1>
-
-        <RouterLink
-          v-if="restaurantSlug"
-          :to="`/menu/${restaurantSlug}`"
-          class="text-sm font-medium text-orange-600 hover:text-orange-700"
-        >
-          Pogledaj jelovnik
-        </RouterLink>
-      </div>
-    </header>
+    <AppHeader mode="admin" :menu-slug="restaurantSlug" />
 
     <!-- DASHBOARD -->
     <main class="mx-auto max-w-6xl px-5 py-10">
