@@ -67,16 +67,16 @@ The project demonstrates full-stack web development, REST API integration, user 
 
 **Homepage**
 
-![Dineria Mobile Homepage](Screenshots/DineriaMob.png)
+![Dineria Mobile Homepage](Screenshots/DineriaMob.jpeg)
 
 **Digital Menu**
 
-![Dineria Mobile Digital Menu](Screenshots/DineriaMob2.png)
+![Dineria Mobile Digital Menu](Screenshots/DineriaMob2.jpeg)
 
 **Login**
 
-![Dineria Mobile Login](Screenshots/DineriaMob3.png)
+![Dineria Mobile Login](Screenshots/DineriaMob3.jpeg)
 
 **Registration**
 
-![Dineria Mobile Registration](Screenshots/DineriaMob4.png)
+![Dineria Mobile Registration](Screenshots/DineriaMob4.jpeg)
