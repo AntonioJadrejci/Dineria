@@ -1,4 +1,3 @@
-
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { apiFetch, API_URL } from '../services/api'
@@ -6,6 +5,9 @@ import QRCode from 'qrcode'
 
 
 const restaurantSlug = computed(() => restaurant.value?.slug ?? '')
+const myRestaurants = ref([])
+const selectedRestaurantSlug = ref(sessionStorage.getItem('dineria-selected-restaurant') || '')
+const switchingRestaurant = ref(false)
 const hasNoRestaurant = ref(false)
 const creatingRestaurant = ref(false)
 const restaurantFormError = ref('')
@@ -80,32 +82,38 @@ function downloadQrCode() {
 
 // Dohvaćanje podataka restorana
 
-async function loadDashboard() {
+async function loadDashboard(preferredSlug = selectedRestaurantSlug.value) {
   loading.value = true
   error.value = ''
   hasNoRestaurant.value = false
+  qrCodeDataUrl.value = ''
+  qrError.value = ''
 
   try {
-    // Pronađi restorane prijavljenog korisnika
     const myRestaurantsResponse = await apiFetch('/api/my/restaurants')
-
     if (!myRestaurantsResponse.ok) {
       throw new Error('Nije moguće dohvatiti tvoje restorane.')
     }
 
-    const myRestaurants = await myRestaurantsResponse.json()
+    const availableRestaurants = await myRestaurantsResponse.json()
+    myRestaurants.value = availableRestaurants
 
-    if (myRestaurants.length === 0) {
+    if (availableRestaurants.length === 0) {
       restaurant.value = null
+      selectedRestaurantSlug.value = ''
+      sessionStorage.removeItem('dineria-selected-restaurant')
       hasNoRestaurant.value = true
       return
     }
 
-    // Zasad prikazujemo prvi restoran korisnika
-    const slug = myRestaurants[0].slug
+    const selected = availableRestaurants.find(item => item.slug === preferredSlug)
+      ?? availableRestaurants[0]
+
+    selectedRestaurantSlug.value = selected.slug
+    sessionStorage.setItem('dineria-selected-restaurant', selected.slug)
 
     const response = await fetch(
-      `${API_URL}/api/restaurants/${encodeURIComponent(slug)}/menu`
+      `${API_URL}/api/restaurants/${encodeURIComponent(selected.slug)}/menu`
     )
 
     if (!response.ok) {
@@ -122,6 +130,18 @@ async function loadDashboard() {
   }
 }
 
+async function changeRestaurant(event) {
+  const slug = event.target.value
+  if (!slug || slug === selectedRestaurantSlug.value || switchingRestaurant.value) return
+  switchingRestaurant.value = true
+  showProductForm.value = false
+  showCategoryForm.value = false
+  try {
+    await loadDashboard(slug)
+  } finally {
+    switchingRestaurant.value = false
+  }
+}
 
 async function createRestaurant() {
   if (creatingRestaurant.value) return
@@ -150,8 +170,9 @@ async function createRestaurant() {
       throw new Error('Kreiranje restorana nije uspjelo.')
     }
 
-    // Ponovno učitaj dashboard novog restorana
-    await loadDashboard()
+    // Nakon kreiranja odmah otvori novi restoran.
+    const createdRestaurant = await response.json()
+    await loadDashboard(createdRestaurant.slug)
   } catch (err) {
     restaurantFormError.value = err.message
   } finally {
@@ -576,6 +597,30 @@ onMounted(loadDashboard)
 
 
       <template v-else-if="restaurant">
+        <!-- Odabir restorana kojem prijavljeni korisnik ima pristup -->
+        <section class="mb-8 rounded-2xl border border-stone-200 bg-white p-6">
+          <label for="restaurant-selector" class="mb-2 block text-sm font-semibold text-stone-700">
+            Odabrani restoran
+          </label>
+          <select
+            id="restaurant-selector"
+            :value="selectedRestaurantSlug"
+            @change="changeRestaurant"
+            :disabled="switchingRestaurant || saving || categorySaving"
+            class="w-full rounded-xl border border-stone-200 bg-white px-4 py-3 outline-none focus:border-orange-500 disabled:opacity-50"
+          >
+            <option
+              v-for="item in myRestaurants"
+              :key="item.id"
+              :value="item.slug"
+            >
+              {{ item.name }}
+            </option>
+          </select>
+          <p class="mt-2 text-xs text-stone-500">
+            Prikazani su samo restorani kojima tvoj račun ima pristup.
+          </p>
+        </section>
         <!-- Naslov -->
         <div class="mb-8">
           <p class="mb-2 text-sm font-semibold text-orange-600">
