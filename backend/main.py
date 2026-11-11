@@ -5,6 +5,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, UnidentifiedImageError
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
@@ -297,3 +298,63 @@ def get_my_restaurants(
     restaurants = db.scalars(statement).all()
 
     return restaurants
+
+@app.delete("/api/restaurants/{restaurant_id}", status_code=204)
+def delete_restaurant(
+    restaurant_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    restaurant = db.get(Restaurant, restaurant_id)
+
+    if restaurant is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Restoran nije pronađen."
+        )
+
+    require_restaurant_access(restaurant.id, user, db)
+
+    # Dohvati sve putanje fotografija iz Storagea.
+    prefix = f"restaurants/{restaurant.id}/"
+
+    try:
+        bucket = supabase.storage.from_(BUCKET_NAME)
+
+        # Fotografije su organizirane po proizvodima.
+        product_folders = bucket.list(f"{prefix}products")
+
+        image_paths = []
+
+        for folder in product_folders:
+            product_id = folder["name"]
+
+            images = bucket.list(
+                f"{prefix}products/{product_id}"
+            )
+
+            for image in images:
+                image_paths.append(
+                    f"{prefix}products/{product_id}/{image['name']}"
+                )
+
+        # Brisanje svih fotografija restorana.
+        if image_paths:
+            bucket.remove(image_paths)
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=502,
+            detail="Brisanje fotografija restorana nije uspjelo."
+        ) from error
+
+    try:
+        db.delete(restaurant)
+        db.commit()
+
+    except SQLAlchemyError as error:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Brisanje restorana iz baze nije uspjelo."
+        ) from error
