@@ -18,8 +18,9 @@ class Restaurant(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     categories: Mapped[list["Category"]] = relationship(
-        back_populates="restaurant"
-    )
+    back_populates="restaurant",
+    passive_deletes=True
+)
 
 
 class Category(Base):

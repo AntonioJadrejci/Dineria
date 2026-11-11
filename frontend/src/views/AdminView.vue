@@ -13,6 +13,10 @@ const hasNoRestaurant = ref(false)
 const creatingRestaurant = ref(false)
 const showRestaurantForm = ref(false)
 const restaurantFormError = ref('')
+const showDeleteRestaurantDialog = ref(false)
+const deleteRestaurantConfirmation = ref('')
+const deletingRestaurant = ref(false)
+const deleteRestaurantError = ref('')
 
 const restaurantForm = ref({
   name: '',
@@ -200,6 +204,60 @@ async function createRestaurant() {
   }
 }
 
+
+
+function openDeleteRestaurantDialog() {
+  if (!restaurant.value || deletingRestaurant.value) return
+  deleteRestaurantConfirmation.value = ''
+  deleteRestaurantError.value = ''
+  showDeleteRestaurantDialog.value = true
+}
+
+function closeDeleteRestaurantDialog() {
+  if (deletingRestaurant.value) return
+  showDeleteRestaurantDialog.value = false
+  deleteRestaurantConfirmation.value = ''
+  deleteRestaurantError.value = ''
+}
+
+async function deleteRestaurant() {
+  if (deletingRestaurant.value || !restaurant.value) return
+  if (deleteRestaurantConfirmation.value !== restaurant.value.name) return
+
+  deletingRestaurant.value = true
+  deleteRestaurantError.value = ''
+  const restaurantId = restaurant.value.id
+  const deletedSlug = restaurant.value.slug
+
+  try {
+    const response = await apiFetch(`/api/restaurants/${restaurantId}`, {
+      method: 'DELETE'
+    })
+
+    if (!response.ok) {
+      let message = 'Brisanje restorana nije uspjelo.'
+      try {
+        const body = await response.json()
+        if (typeof body.detail === 'string') message = body.detail
+      } catch { /* odgovor nema JSON tijelo */ }
+      throw new Error(message)
+    }
+
+    showDeleteRestaurantDialog.value = false
+    deleteRestaurantConfirmation.value = ''
+    showProductForm.value = false
+    showCategoryForm.value = false
+    if (selectedRestaurantSlug.value === deletedSlug) {
+      selectedRestaurantSlug.value = ''
+      sessionStorage.removeItem('dineria-selected-restaurant')
+    }
+    await loadDashboard('')
+  } catch (err) {
+    deleteRestaurantError.value = err.message || 'Brisanje restorana nije uspjelo.'
+  } finally {
+    deletingRestaurant.value = false
+  }
+}
 
 
 // Pretvaranje kategorija u jedinstveni popis proizvoda
@@ -640,6 +698,16 @@ onMounted(loadDashboard)
             + Novi restoran
           </button>
         </div>
+        <div class="mb-6 flex justify-end">
+          <button
+            type="button"
+            @click="openDeleteRestaurantDialog"
+            :disabled="switchingRestaurant || saving || categorySaving || deletingRestaurant"
+            class="rounded-xl border border-red-200 px-5 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+          >
+            Obriši restoran
+          </button>
+        </div>
         <!-- Naslov -->
         <div class="mb-8">
           <p class="mb-2 text-sm font-semibold text-orange-600">
@@ -881,6 +949,60 @@ onMounted(loadDashboard)
         </section>
       </template>
     </main>
+
+    <!-- POTVRDA BRISANJA RESTORANA -->
+    <div
+      v-if="showDeleteRestaurantDialog"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-restaurant-title"
+        class="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl sm:p-8"
+      >
+        <h3 id="delete-restaurant-title" class="text-2xl font-bold text-red-600">
+          Trajno brisanje restorana
+        </h3>
+        <p class="mt-4 text-sm leading-6 text-stone-600">
+          Brisanjem restorana <strong>{{ restaurant?.name }}</strong> trajno će se ukloniti
+          njegove kategorije, proizvodi i pripadajuće fotografije. Ovu radnju nije moguće poništiti.
+        </p>
+        <label for="delete-restaurant-confirm" class="mt-5 block text-sm font-medium">
+          Za potvrdu upiši točan naziv restorana:
+          <span class="font-bold">{{ restaurant?.name }}</span>
+        </label>
+        <input
+          id="delete-restaurant-confirm"
+          v-model="deleteRestaurantConfirmation"
+          type="text"
+          autocomplete="off"
+          class="mt-2 w-full rounded-xl border border-stone-200 px-4 py-3 outline-none focus:border-red-500"
+          :disabled="deletingRestaurant"
+        />
+        <p v-if="deleteRestaurantError" role="alert" class="mt-3 text-sm text-red-600">
+          {{ deleteRestaurantError }}
+        </p>
+        <div class="mt-6 flex flex-col gap-3 sm:flex-row">
+          <button
+            type="button"
+            @click="closeDeleteRestaurantDialog"
+            :disabled="deletingRestaurant"
+            class="flex-1 rounded-xl border border-stone-200 px-4 py-3 font-semibold hover:bg-stone-50 disabled:opacity-50"
+          >
+            Odustani
+          </button>
+          <button
+            type="button"
+            @click="deleteRestaurant"
+            :disabled="deletingRestaurant || deleteRestaurantConfirmation !== restaurant?.name"
+            class="flex-1 rounded-xl bg-red-600 px-4 py-3 font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+          >
+            {{ deletingRestaurant ? 'Brisanje...' : 'Trajno obriši' }}
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- MODAL ZA DODAVANJE I UREĐIVANJE -->
     <div
