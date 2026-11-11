@@ -8,6 +8,10 @@ The platform provides restaurant owners with an intuitive dashboard for managing
 
 **Language:** The application interface is currently available in Croatian, as Dineria was initially developed for the Croatian restaurant market.
 
+**Live Demo:** [Dineria](https://dineria-frontend.onrender.com/)
+
+**Backend API:** [FastAPI](https://dineria-backend.onrender.com/)
+
 ## Features
 
 - **User Authentication** – Secure registration and login for restaurant administrators.
