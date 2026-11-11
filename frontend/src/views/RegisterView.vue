@@ -17,18 +17,40 @@ onMounted(async () => {
 })
 async function register() {
   if (loading.value) return
+
   error.value = ''
   success.value = ''
-  if (password.value.length < 8) { error.value = 'Lozinka mora imati najmanje 8 znakova.'; return }
-  if (password.value !== confirmPassword.value) { error.value = 'Lozinke se ne podudaraju.'; return }
+
+  if (password.value.length < 8) {
+    error.value = 'Lozinka mora imati najmanje 8 znakova.'
+    return
+  }
+
+  if (password.value !== confirmPassword.value) {
+    error.value = 'Lozinke se ne podudaraju.'
+    return
+  }
+
   loading.value = true
+
   try {
-    const { data, error: registerError } = await supabase.auth.signUp({ email: email.value.trim(), password: password.value })
+    const { data, error: registerError } = await supabase.auth.signUp({
+      email: email.value.trim(),
+      password: password.value
+    })
+
     if (registerError) throw registerError
-    if (data.session) await router.push('/admin')
-    else success.value = 'Registracija je zaprimljena. Provjeri e-mail i potvrdi račun prije prijave.'
-  } catch (err) { error.value = err.message || 'Registracija nije uspjela.' }
-  finally { loading.value = false }
+
+    if (data.session) {
+      await router.replace('/admin')
+    } else {
+      error.value = 'Račun je kreiran, ali automatska prijava nije uspjela. Provjeri postavku Confirm email u Supabaseu.'
+    }
+  } catch (err) {
+    error.value = err.message || 'Registracija nije uspjela.'
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 <template>
