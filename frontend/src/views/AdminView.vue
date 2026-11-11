@@ -11,6 +11,7 @@ const selectedRestaurantSlug = ref(sessionStorage.getItem('dineria-selected-rest
 const switchingRestaurant = ref(false)
 const hasNoRestaurant = ref(false)
 const creatingRestaurant = ref(false)
+const showRestaurantForm = ref(false)
 const restaurantFormError = ref('')
 
 const restaurantForm = ref({
@@ -144,6 +145,20 @@ async function changeRestaurant(event) {
   }
 }
 
+function openRestaurantForm() {
+  restaurantForm.value = { name: '', slug: '', description: '' }
+  restaurantFormError.value = ''
+  showRestaurantForm.value = true
+  showProductForm.value = false
+  showCategoryForm.value = false
+}
+
+function closeRestaurantForm() {
+  if (creatingRestaurant.value) return
+  showRestaurantForm.value = false
+  restaurantFormError.value = ''
+}
+
 async function createRestaurant() {
   if (creatingRestaurant.value) return
 
@@ -174,6 +189,10 @@ async function createRestaurant() {
     // Nakon kreiranja odmah otvori novi restoran.
     const createdRestaurant = await response.json()
     await loadDashboard(createdRestaurant.slug)
+    if (!error.value) {
+      showRestaurantForm.value = false
+      restaurantForm.value = { name: '', slug: '', description: '' }
+    }
   } catch (err) {
     restaurantFormError.value = err.message
   } finally {
@@ -494,16 +513,16 @@ onMounted(loadDashboard)
 
       
 <div
-  v-else-if="hasNoRestaurant"
+  v-else-if="hasNoRestaurant || showRestaurantForm"
   class="mx-auto max-w-xl rounded-3xl border border-stone-200 bg-white p-8 shadow-sm"
 >
   <div class="mb-8 text-center">
     <h2 class="text-3xl font-bold">
-      Dobrodošao u Dineriju!
+      {{ hasNoRestaurant ? 'Dobrodošao u Dineriju!' : 'Novi restoran' }}
     </h2>
 
     <p class="mt-3 text-stone-500">
-      Kreiraj svoj restoran i počni uređivati digitalni jelovnik.
+      {{ hasNoRestaurant ? 'Kreiraj svoj restoran i počni uređivati digitalni jelovnik.' : 'Dodaj još jedan restoran na svoj račun.' }}
     </p>
   </div>
 
@@ -573,6 +592,15 @@ onMounted(loadDashboard)
     >
       {{ creatingRestaurant ? 'Kreiranje...' : 'Kreiraj restoran' }}
     </button>
+    <button
+      v-if="!hasNoRestaurant"
+      type="button"
+      @click="closeRestaurantForm"
+      :disabled="creatingRestaurant"
+      class="mt-3 w-full rounded-xl border border-stone-200 px-4 py-3 font-semibold text-stone-700 hover:bg-stone-50 disabled:opacity-50"
+    >
+      Odustani i vrati se na dashboard
+    </button>
   </form>
 </div>
 
@@ -602,6 +630,16 @@ onMounted(loadDashboard)
             Prikazani su samo restorani kojima tvoj račun ima pristup.
           </p>
         </section>
+        <div class="mb-8 flex justify-end">
+          <button
+            type="button"
+            @click="openRestaurantForm"
+            :disabled="switchingRestaurant || saving || categorySaving"
+            class="rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-orange-600 disabled:opacity-50"
+          >
+            + Novi restoran
+          </button>
+        </div>
         <!-- Naslov -->
         <div class="mb-8">
           <p class="mb-2 text-sm font-semibold text-orange-600">
