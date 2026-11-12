@@ -4,7 +4,7 @@ from uuid import UUID, uuid4
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, UnidentifiedImageError
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
@@ -299,6 +299,66 @@ def get_my_restaurants(
 
     return restaurants
 
+# Zajednicka logika za brisanje restorana i korisnickog racuna.
+# Storage i PostgreSQL nisu jedna transakcija; ako DB commit ne uspije,
+# prethodno obrisane fotografije nije moguce automatski vratiti.
+def _list_storage_entries(bucket, folder_path):
+    entries = []
+    offset = 0
+    page_size = 100
+
+    while True:
+        page = bucket.list(folder_path, {"limit": page_size, "offset": offset})
+        if not isinstance(page, list):
+            raise RuntimeError("Storage nije vratio ocekivani popis datoteka.")
+        entries.extend(page)
+        if len(page) < page_size:
+            break
+        offset += page_size
+
+    return entries
+
+
+def _remove_restaurant_images(restaurant_id):
+    bucket = supabase.storage.from_(BUCKET_NAME)
+    folder_path = f"restaurants/{restaurant_id}/products"
+    paths = []
+
+    for product_folder in _list_storage_entries(bucket, folder_path):
+        # Supabase Storage oznacava mape s id=None.
+        if product_folder.get("id") is not None:
+            raise RuntimeError("Neocekivana datoteka u mapi proizvoda.")
+        product_path = f"{folder_path}/{product_folder['name']}"
+        for entry in _list_storage_entries(bucket, product_path):
+            if entry.get("id") is None:
+                raise RuntimeError("Neocekivana podmapa u mapi fotografija.")
+            paths.append(f"{product_path}/{entry['name']}")
+
+    # Manje serije kako ne bismo presli ogranicenja Storage API-ja.
+    for i in range(0, len(paths), 100):
+        bucket.remove(paths[i:i + 100])
+
+
+def _delete_restaurant_data(restaurant, db):
+    try:
+        _remove_restaurant_images(restaurant.id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Brisanje fotografija nije uspjelo. Pokusaj ponovno."
+        ) from exc
+
+    try:
+        db.delete(restaurant)
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Brisanje restorana iz baze nije uspjelo."
+        ) from exc
+
+
 @app.delete("/api/restaurants/{restaurant_id}", status_code=204)
 def delete_restaurant(
     restaurant_id: int,
@@ -306,55 +366,65 @@ def delete_restaurant(
     user=Depends(get_current_user),
 ):
     restaurant = db.get(Restaurant, restaurant_id)
-
     if restaurant is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Restoran nije pronađen."
-        )
+        raise HTTPException(status_code=404, detail="Restoran nije pronaden.")
 
     require_restaurant_access(restaurant.id, user, db)
 
-    # Dohvati sve putanje fotografija iz Storagea.
-    prefix = f"restaurants/{restaurant.id}/"
+    # Ako postoji vise administratora, nemamo model vlasnistva
+    # koji bi dopustio jednom administratoru brisanje za sve.
+    admin_count = db.scalar(
+        select(func.count()).select_from(RestaurantAdmin).where(
+            RestaurantAdmin.restaurant_id == restaurant_id
+        )
+    )
+    if admin_count != 1:
+        raise HTTPException(
+            status_code=409,
+            detail="Restoran ima vise administratora ili nema valjanog administratora."
+        )
 
-    try:
-        bucket = supabase.storage.from_(BUCKET_NAME)
+    _delete_restaurant_data(restaurant, db)
 
-        # Fotografije su organizirane po proizvodima.
-        product_folders = bucket.list(f"{prefix}products")
 
-        image_paths = []
+@app.delete("/api/me", status_code=204)
+def delete_my_account(
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    user_id = UUID(str(user.id))
+    restaurant_ids = db.scalars(
+        select(RestaurantAdmin.restaurant_id)
+        .where(RestaurantAdmin.user_id == user_id)
+        .order_by(RestaurantAdmin.restaurant_id)
+    ).all()
+    restaurant_ids = list(dict.fromkeys(restaurant_ids))
 
-        for folder in product_folders:
-            product_id = folder["name"]
-
-            images = bucket.list(
-                f"{prefix}products/{product_id}"
+    # Sve provjere prije prvog brisanja: nema djelomicnog brisanja
+    # zbog poznatog sukoba s drugim administratorima.
+    for restaurant_id in restaurant_ids:
+        admin_count = db.scalar(
+            select(func.count()).select_from(RestaurantAdmin).where(
+                RestaurantAdmin.restaurant_id == restaurant_id
+            )
+        )
+        if admin_count != 1:
+            raise HTTPException(
+                status_code=409,
+                detail="Jedan od restorana ima vise administratora. Brisanje racuna je blokirano."
             )
 
-            for image in images:
-                image_paths.append(
-                    f"{prefix}products/{product_id}/{image['name']}"
-                )
+    for restaurant_id in restaurant_ids:
+        restaurant = db.get(Restaurant, restaurant_id)
+        if restaurant is not None:
+            _delete_restaurant_data(restaurant, db)
 
-        # Brisanje svih fotografija restorana.
-        if image_paths:
-            bucket.remove(image_paths)
-
-    except Exception as error:
+    # Poziv se izvrsava iskljucivo na backendu uz Supabase secret key.
+    # Ako Auth brisanje padne, racun ostaje pa se zahtjev moze ponoviti.
+    try:
+        supabase.auth.admin.delete_user(str(user_id))
+    except Exception as exc:
         raise HTTPException(
             status_code=502,
-            detail="Brisanje fotografija restorana nije uspjelo."
-        ) from error
-
-    try:
-        db.delete(restaurant)
-        db.commit()
-
-    except SQLAlchemyError as error:
-        db.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail="Brisanje restorana iz baze nije uspjelo."
-        ) from error
+            detail="Restorani su obrisani, ali brisanje korisnickog racuna nije uspjelo. Pokusaj ponovno."
+        ) from exc
