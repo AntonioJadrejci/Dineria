@@ -18,6 +18,11 @@ const deleteRestaurantConfirmation = ref('')
 const deletingRestaurant = ref(false)
 const deleteRestaurantError = ref('')
 
+const showDeleteAccountDialog = ref(false)
+const deleteAccountConfirmation = ref('')
+const deletingAccount = ref(false)
+const deleteAccountError = ref('')
+
 const restaurantForm = ref({
   name: '',
   slug: '',
@@ -259,6 +264,52 @@ async function deleteRestaurant() {
   }
 }
 
+
+function openDeleteAccountDialog() {
+  if (deletingAccount.value) return
+  deleteAccountConfirmation.value = ''
+  deleteAccountError.value = ''
+  showDeleteAccountDialog.value = true
+}
+
+function closeDeleteAccountDialog() {
+  if (deletingAccount.value) return
+  showDeleteAccountDialog.value = false
+  deleteAccountConfirmation.value = ''
+  deleteAccountError.value = ''
+}
+
+async function deleteAccount() {
+  if (deletingAccount.value || deleteAccountConfirmation.value !== 'OBRIŠI') return
+  deletingAccount.value = true
+  deleteAccountError.value = ''
+
+  try {
+    const response = await apiFetch('/api/me', { method: 'DELETE' })
+    if (!response.ok) {
+      let message = 'Brisanje računa nije uspjelo.'
+      try {
+        const body = await response.json()
+        if (typeof body.detail === 'string') message = body.detail
+      } catch { /* odgovor možda nema JSON tijelo */ }
+      throw new Error(message)
+    }
+
+    // Supabase sesija je na serveru opozvana brisanjem Auth korisnika.
+    // Uklanjamo samo Supabase auth tokene iz preglednika, ne ostale podatke aplikacija.
+    for (const storage of [window.localStorage, window.sessionStorage]) {
+      for (let i = storage.length - 1; i >= 0; i--) {
+        const key = storage.key(i)
+        if (key && /^sb-.*-auth-token$/.test(key)) storage.removeItem(key)
+      }
+    }
+    sessionStorage.removeItem('dineria-selected-restaurant')
+    window.location.replace('/')
+  } catch (err) {
+    deleteAccountError.value = err.message || 'Brisanje računa nije uspjelo.'
+    deletingAccount.value = false
+  }
+}
 
 // Pretvaranje kategorija u jedinstveni popis proizvoda
 const products = computed(() => {
@@ -948,7 +999,57 @@ onMounted(loadDashboard)
           </div>
         </section>
       </template>
+
+      <!-- POSTAVKE RAČUNA: dostupne i kada korisnik nema restorana -->
+      <section v-if="!loading && !error" class="mt-10 rounded-2xl border border-red-200 bg-white p-6">
+        <h3 class="text-xl font-bold text-stone-900">Postavke računa</h3>
+        <p class="mt-2 text-sm leading-6 text-stone-600">
+          Brisanjem računa trajno se brišu svi tvoji restorani, kategorije, proizvodi i fotografije.
+          Ovu radnju nije moguće poništiti.
+        </p>
+        <button
+          type="button"
+          @click="openDeleteAccountDialog"
+          :disabled="deletingAccount || deletingRestaurant || saving || categorySaving || creatingRestaurant"
+          class="mt-5 rounded-xl border border-red-300 px-5 py-3 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
+        >
+          Obriši moj račun
+        </button>
+      </section>
     </main>
+
+    <!-- POTVRDA TRAJNOG BRISANJA RAČUNA -->
+    <div v-if="showDeleteAccountDialog" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+      <div role="dialog" aria-modal="true" aria-labelledby="delete-account-title"
+        class="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl bg-white p-6 shadow-xl sm:p-8">
+        <h3 id="delete-account-title" class="text-2xl font-bold text-red-700">Trajno brisanje računa</h3>
+        <p class="mt-4 text-sm leading-6 text-stone-600">
+          Obrisat će se tvoj korisnički račun te svi restorani kojima jedini upravljaš,
+          zajedno s kategorijama, proizvodima i fotografijama. Ovu radnju nije moguće poništiti.
+        </p>
+        <p class="mt-3 text-sm leading-6 text-stone-600">
+          Ako neki restoran ima još administratora, brisanje računa bit će odbijeno.
+        </p>
+        <label for="delete-account-confirm" class="mt-5 block text-sm font-medium text-stone-900">
+          Za potvrdu upiši <strong>OBRIŠI</strong>:
+        </label>
+        <input id="delete-account-confirm" v-model="deleteAccountConfirmation" type="text"
+          autocomplete="off" :disabled="deletingAccount"
+          class="mt-2 w-full rounded-xl border border-stone-200 px-4 py-3 outline-none focus:border-red-500 disabled:opacity-50" />
+        <p v-if="deleteAccountError" role="alert" class="mt-3 text-sm text-red-700">{{ deleteAccountError }}</p>
+        <div class="mt-6 flex flex-col gap-3 sm:flex-row">
+          <button type="button" @click="closeDeleteAccountDialog" :disabled="deletingAccount"
+            class="flex-1 rounded-xl border border-stone-200 px-4 py-3 font-semibold hover:bg-stone-50 disabled:opacity-50">
+            Odustani
+          </button>
+          <button type="button" @click="deleteAccount"
+            :disabled="deletingAccount || deleteAccountConfirmation !== 'OBRIŠI'"
+            class="flex-1 rounded-xl bg-red-700 px-4 py-3 font-semibold text-white hover:bg-red-800 disabled:opacity-50">
+            {{ deletingAccount ? 'Brisanje...' : 'Trajno obriši račun' }}
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- POTVRDA BRISANJA RESTORANA -->
     <div
